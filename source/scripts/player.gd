@@ -125,7 +125,7 @@ func _process(delta: float) -> void:
         var entry: Dictionary = _tracers[i]
         var age: float = float(entry["age"]) + delta
         entry["age"] = age
-        if age > 0.09:
+        if age > 0.25:
             var mesh: Node3D = entry["mesh"]
             mesh.queue_free()
             _tracers.remove_at(i)
@@ -203,6 +203,8 @@ func _fire() -> void:
         return
     var from: Vector3 = _camera.global_position
     var dir: Vector3 = -_camera.global_transform.basis.z
+    dir.y = 0.0
+    dir = dir.normalized()
     var to: Vector3 = from + dir * 80.0
     var space := get_world_3d().direct_space_state
     var query := PhysicsRayQueryParameters3D.create(from, to)
@@ -229,8 +231,8 @@ func _spawn_tracer(from: Vector3, to: Vector3) -> void:
     mat.emission_energy_multiplier = 2.0
     tracer.material_override = mat
     tracer.position = (from + to) * 0.5
-    tracer.look_at(to, Vector3.UP)
     get_parent().add_child(tracer)
+    tracer.look_at(to, Vector3.UP)
     _tracers.append({"mesh": tracer, "age": 0.0})
 
 func _spawn_flash(pos: Vector3) -> void:
