@@ -3,6 +3,7 @@ extends Node3D
 const PLAYER_SCRIPT: Script = preload("res://scripts/player.gd")
 const CAR_SCRIPT: Script = preload("res://scripts/car.gd")
 const TOUCH_UI_SCRIPT: Script = preload("res://scripts/touch_controls.gd")
+const CHEAT_UI_SCRIPT: Script = preload("res://scripts/cheat_ui.gd")
 
 var player: CharacterBody3D
 var car: CharacterBody3D
@@ -18,9 +19,16 @@ func _ready() -> void:
     touch_ui.name = "PPSSPPLikeTouchControls"
     touch_ui.set_script(TOUCH_UI_SCRIPT)
     add_child(touch_ui)
+    var cheat_ui := CanvasLayer.new()
+    cheat_ui.name = "CheatUI"
+    cheat_ui.set_script(CHEAT_UI_SCRIPT)
+    add_child(cheat_ui)
 
 func _process(_delta: float) -> void:
     if player == null or car == null:
+        return
+    var cheat_ui := get_node_or_null("CheatUI")
+    if cheat_ui != null and cheat_ui.has_method("is_panel_open") and bool(cheat_ui.is_panel_open()):
         return
     if Input.is_action_just_pressed("interact"):
         if player.in_vehicle:
@@ -41,7 +49,8 @@ func _setup_input_actions() -> void:
         "look_up": [KEY_I],
         "look_down": [KEY_K],
         "look_left": [KEY_J],
-        "look_right": [KEY_L]
+        "look_right": [KEY_L],
+        "weapon_switch": [KEY_Q]
     }
     for action_name in action_keys.keys():
         var action := StringName(action_name)
@@ -52,6 +61,12 @@ func _setup_input_actions() -> void:
             event.physical_keycode = keycode
             if not InputMap.action_has_event(action, event):
                 InputMap.action_add_event(action, event)
+    if not InputMap.has_action("fire"):
+        InputMap.add_action("fire")
+    var mouse_event := InputEventMouseButton.new()
+    mouse_event.button_index = MOUSE_BUTTON_LEFT
+    if not InputMap.action_has_event("fire", mouse_event):
+        InputMap.action_add_event("fire", mouse_event)
 
 func _setup_environment() -> void:
     var world_env := WorldEnvironment.new()

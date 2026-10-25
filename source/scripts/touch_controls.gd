@@ -3,6 +3,10 @@ extends CanvasLayer
 # Touch layout inspired by the familiar PPSSPP handheld emulator layout.
 # It is an original UI; no emulator assets are copied.
 
+var _fire_button: Button = null
+var _switch_button: Button = null
+var _weapon_label: Label = null
+
 func _ready() -> void:
     var layer := Control.new()
     layer.name = "ControlsOverlay"
@@ -53,7 +57,24 @@ func _ready() -> void:
     _add_button(layer, "SELECT", "look_down", Control.PRESET_TOP_LEFT, Rect2(530, 20, 92, 40), 13, Color(0.18,0.20,0.26,0.70))
     _add_button(layer, "START", "look_up", Control.PRESET_TOP_LEFT, Rect2(636, 20, 92, 40), 13, Color(0.18,0.20,0.26,0.70))
 
-func _add_button(parent: Control, caption: String, action_name: String, preset: int, rect: Rect2, font_size: int, tint: Color = Color(0.12,0.15,0.22,0.72)) -> void:
+    # Weapon buttons, hidden until a cheat grants weapons.
+    _fire_button = _add_button(layer, "FIRE", "fire", Control.PRESET_BOTTOM_RIGHT, Rect2(-229, -330, 110, 60), 22, Color(0.85,0.15,0.15,0.85))
+    _fire_button.visible = false
+    _switch_button = _add_button(layer, "SWITCH", "weapon_switch", Control.PRESET_BOTTOM_RIGHT, Rect2(-104, -330, 90, 60), 16, Color(0.20,0.30,0.50,0.80))
+    _switch_button.visible = false
+    _weapon_label = Label.new()
+    _weapon_label.name = "WeaponLabel"
+    _weapon_label.text = "Weapon: —"
+    _weapon_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+    _weapon_label.offset_left = 760
+    _weapon_label.offset_top = 20
+    _weapon_label.offset_right = 1160
+    _weapon_label.offset_bottom = 56
+    _weapon_label.add_theme_font_size_override("font_size", 18)
+    _weapon_label.add_theme_color_override("font_color", Color(1,1,1,0.85))
+    layer.add_child(_weapon_label)
+
+func _add_button(parent: Control, caption: String, action_name: String, preset: int, rect: Rect2, font_size: int, tint: Color = Color(0.12,0.15,0.22,0.72)) -> Button:
     var button := Button.new()
     button.name = "Touch_" + caption
     button.text = caption
@@ -89,6 +110,17 @@ func _add_button(parent: Control, caption: String, action_name: String, preset: 
     button.button_down.connect(_press_action.bind(StringName(action_name)))
     button.button_up.connect(_release_action.bind(StringName(action_name)))
     parent.add_child(button)
+    return button
+
+func set_weapons_ui_visible(v: bool) -> void:
+    if _fire_button != null:
+        _fire_button.visible = v
+    if _switch_button != null:
+        _switch_button.visible = v
+
+func set_weapon_label(text: String) -> void:
+    if _weapon_label != null:
+        _weapon_label.text = "Weapon: " + text
 
 func _press_action(action_name: StringName) -> void:
     if InputMap.has_action(action_name):
