@@ -84,6 +84,10 @@ func _setup_environment() -> void:
     env.ambient_light_color = Color(0.67, 0.67, 0.82)
     env.ambient_light_energy = 0.8
     env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    env.fog_enabled = true
+    env.fog_density = 0.004
+    env.fog_light_color = Color(0.98, 0.55, 0.45)
+    env.fog_sun_scatter = 0.3
     world_env.environment = env
     add_child(world_env)
 
@@ -179,18 +183,14 @@ func _build_city() -> void:
             var center := Vector3(float(x_idx * 28 + 14), h * 0.5, float(z_idx * 28 + 14))
             var base_color: Color = building_colors[rng.randi_range(0, building_colors.size() - 1)]
             _add_box("Building_%d_%d" % [x_idx, z_idx], center, Vector3(w, h, d), base_color, true)
-            # Flat roof cap and simple window strips make the skyline read clearly on mobile.
+            # Roof cap, rooftop AC box, neon trim and windows on all four faces.
             _add_box("RoofCap_%d_%d" % [x_idx, z_idx], center + Vector3(0, h * 0.5 + 0.22, 0), Vector3(w * 0.84, 0.44, d * 0.84), Color(0.25, 0.28, 0.34))
-            var cols := int(floor(w / 2.5))
-            var rows := int(floor((h - 3.0) / 3.0))
-            for row in range(max(1, rows)):
-                var wy := 2.2 + float(row) * 3.0
-                for col in range(max(1, cols)):
-                    var wx: float = center.x - w * 0.5 + 1.4 + float(col) * ((w - 2.0) / max(1, cols - 1))
-                    if wy < h - 1.0 and wx < center.x + w * 0.5 - 0.5:
-                        var win_color := Color(0.08, 0.22, 0.31) if rng.randf() > 0.18 else Color(0.99, 0.63, 0.30)
-                        var win_emission := Color(0.0, 0.0, 0.0) if win_color.b > 0.3 else Color(0.25, 0.07, 0.01)
-                        _add_box("Window", Vector3(wx, wy, center.z - d * 0.5 - 0.035), Vector3(0.95, 1.05, 0.06), win_color, false, win_emission)
+            if rng.randf() < 0.6:
+                _add_box("RoofAC_%d_%d" % [x_idx, z_idx], center + Vector3(w * 0.2, h * 0.5 + 0.75, 0), Vector3(1.3, 0.7, 1.1), Color(0.45, 0.47, 0.50))
+            if rng.randf() < 0.35:
+                var neon: Color = Color(0.92, 0.14, 0.55) if rng.randf() < 0.5 else Color(0.08, 0.75, 0.90)
+                _add_box("NeonTrim_%d_%d" % [x_idx, z_idx], Vector3(center.x, h + 0.05, center.z - d * 0.5 - 0.06), Vector3(w * 0.9, 0.14, 0.08), neon, false, neon)
+            _add_building_windows(center, w, h, d, rng)
 
     # Palm trees along the beachfront and selected street corners.
     for i in range(18):
@@ -198,9 +198,51 @@ func _build_city() -> void:
     for p in [Vector3(-55,0,-55), Vector3(55,0,-55), Vector3(-55,0,55), Vector3(55,0,55), Vector3(-83,0,0), Vector3(83,0,0)]:
         _add_palm(p)
 
+    # Streetlights along the central avenues.
+    for sx in [-84.0, -42.0, 0.0, 42.0, 84.0]:
+        for sz in [-38.0, 18.0]:
+            var pole := Node3D.new()
+            pole.name = "Streetlight"
+            pole.position = Vector3(sx, 0, sz)
+            add_child(pole)
+            _add_cylinder(pole, "Pole", Vector3(0, 2.5, 0), 5.0, 0.09, Color(0.15, 0.16, 0.18))
+            var lamp := MeshInstance3D.new()
+            var lamp_mesh := SphereMesh.new()
+            lamp_mesh.radius = 0.24
+            lamp_mesh.height = 0.48
+            lamp.mesh = lamp_mesh
+            lamp.position = Vector3(0, 5.15, 0)
+            lamp.material_override = _make_material(Color(1.0, 0.85, 0.55), Color(1.0, 0.7, 0.25))
+            pole.add_child(lamp)
+
     # A few neon-style hotel signs as original textless light panels.
     _add_box("NeonPinkSign", Vector3(17.2, 15.5, -27.0), Vector3(0.18, 4.2, 2.8), Color(0.92, 0.14, 0.55), false, Color(0.95, 0.06, 0.33))
     _add_box("NeonCyanSign", Vector3(-27.0, 11.5, 17.3), Vector3(2.8, 3.4, 0.18), Color(0.08, 0.75, 0.90), false, Color(0.02, 0.55, 0.9))
+
+func _add_building_windows(center: Vector3, w: float, h: float, d: float, rng: RandomNumberGenerator) -> void:
+    var rows := int(floor((h - 3.0) / 3.0))
+    for row in range(max(1, rows)):
+        var wy := 2.2 + float(row) * 3.0
+        if wy >= h - 1.0:
+            continue
+        var cols_x := int(floor(w / 2.5))
+        for col in range(max(1, cols_x)):
+            var wx: float = center.x - w * 0.5 + 1.4 + float(col) * ((w - 2.0) / max(1, cols_x - 1))
+            if wx < center.x + w * 0.5 - 0.5:
+                _add_window(wx, wy, center.z - d * 0.5 - 0.035, Vector3(0.95, 1.05, 0.06), rng)
+                _add_window(wx, wy, center.z + d * 0.5 + 0.035, Vector3(0.95, 1.05, 0.06), rng)
+        var cols_z := int(floor(d / 2.5))
+        for col in range(max(1, cols_z)):
+            var wz: float = center.z - d * 0.5 + 1.4 + float(col) * ((d - 2.0) / max(1, cols_z - 1))
+            if wz < center.z + d * 0.5 - 0.5:
+                _add_window(center.x - w * 0.5 - 0.035, wy, wz, Vector3(0.06, 1.05, 0.95), rng)
+                _add_window(center.x + w * 0.5 + 0.035, wy, wz, Vector3(0.06, 1.05, 0.95), rng)
+
+func _add_window(x: float, y: float, z: float, size: Vector3, rng: RandomNumberGenerator) -> void:
+    var dark := rng.randf() > 0.18
+    var win_color := Color(0.08, 0.22, 0.31) if dark else Color(0.99, 0.63, 0.30)
+    var win_emission := Color(0.0, 0.0, 0.0) if dark else Color(0.25, 0.07, 0.01)
+    _add_box("Window", Vector3(x, y, z), size, win_color, false, win_emission)
 
 func _add_palm(pos: Vector3) -> void:
     var tree := Node3D.new()
@@ -237,6 +279,18 @@ func _spawn_car() -> void:
     _car_box(car, "Hood", Vector3(0, 0.78, -1.18), Vector3(1.85, 0.2, 1.35), Color(0.98, 0.22, 0.48))
     _car_box(car, "Windshield", Vector3(0, 1.05, -0.15), Vector3(1.6, 0.48, 0.85), Color(0.10, 0.22, 0.30))
     _car_box(car, "RearGlass", Vector3(0, 1.02, 0.8), Vector3(1.5, 0.32, 0.55), Color(0.10, 0.22, 0.30))
+    # Headlights, taillights, bumpers, mirrors, seats and dashboard.
+    _car_box(car, "HeadlightL", Vector3(-0.65, 0.55, -2.02), Vector3(0.32, 0.16, 0.06), Color(1.0, 0.95, 0.8))
+    _car_box(car, "HeadlightR", Vector3(0.65, 0.55, -2.02), Vector3(0.32, 0.16, 0.06), Color(1.0, 0.95, 0.8))
+    _car_box(car, "TaillightL", Vector3(-0.65, 0.55, 2.02), Vector3(0.32, 0.16, 0.06), Color(0.9, 0.05, 0.05))
+    _car_box(car, "TaillightR", Vector3(0.65, 0.55, 2.02), Vector3(0.32, 0.16, 0.06), Color(0.9, 0.05, 0.05))
+    _car_box(car, "BumperF", Vector3(0, 0.32, -2.08), Vector3(2.15, 0.22, 0.12), Color(0.15, 0.15, 0.17))
+    _car_box(car, "BumperR", Vector3(0, 0.32, 2.08), Vector3(2.15, 0.22, 0.12), Color(0.15, 0.15, 0.17))
+    _car_box(car, "MirrorL", Vector3(-1.12, 0.95, -0.2), Vector3(0.12, 0.22, 0.3), Color(0.15, 0.15, 0.17))
+    _car_box(car, "MirrorR", Vector3(1.12, 0.95, -0.2), Vector3(0.12, 0.22, 0.3), Color(0.15, 0.15, 0.17))
+    _car_box(car, "SeatL", Vector3(-0.45, 0.72, 0.35), Vector3(0.7, 0.35, 0.55), Color(0.12, 0.12, 0.14))
+    _car_box(car, "SeatR", Vector3(0.45, 0.72, 0.35), Vector3(0.7, 0.35, 0.55), Color(0.12, 0.12, 0.14))
+    _car_box(car, "Dashboard", Vector3(0, 0.82, -0.35), Vector3(1.6, 0.18, 0.4), Color(0.12, 0.12, 0.14))
     for side in [-1.0, 1.0]:
         for front_back in [-1.0, 1.0]:
             var wheel := MeshInstance3D.new()
@@ -283,23 +337,29 @@ func _spawn_player() -> void:
     collider.shape = capsule
     collider.position.y = 0.92
     player.add_child(collider)
-    var visual := MeshInstance3D.new()
-    visual.name = "PlayerPlaceholderModel"
-    var capsule_mesh := CapsuleMesh.new()
-    capsule_mesh.radius = 0.42
-    capsule_mesh.height = 1.85
-    visual.mesh = capsule_mesh
-    visual.position.y = 0.92
-    visual.material_override = _make_material(Color(0.03, 0.68, 0.72), Color(0.0, 0.08, 0.08), 0.9)
-    player.add_child(visual)
+    # Simple humanoid instead of a capsule: legs, torso, arms, head, hair.
+    _car_box(player, "LegL", Vector3(-0.15, 0.28, 0), Vector3(0.2, 0.56, 0.22), Color(0.10, 0.16, 0.35))
+    _car_box(player, "LegR", Vector3(0.15, 0.28, 0), Vector3(0.2, 0.56, 0.22), Color(0.10, 0.16, 0.35))
+    _car_box(player, "Torso", Vector3(0, 0.88, 0), Vector3(0.58, 0.62, 0.3), Color(0.03, 0.68, 0.72))
+    _car_box(player, "ArmL", Vector3(-0.38, 0.88, 0), Vector3(0.15, 0.58, 0.16), Color(0.74, 0.52, 0.38))
+    _car_box(player, "ArmR", Vector3(0.38, 0.88, 0), Vector3(0.15, 0.58, 0.16), Color(0.74, 0.52, 0.38))
     var head := MeshInstance3D.new()
     var head_mesh := SphereMesh.new()
     head_mesh.radius = 0.24
     head_mesh.height = 0.48
     head.mesh = head_mesh
-    head.position = Vector3(0, 1.86, 0)
+    head.position = Vector3(0, 1.42, 0)
     head.material_override = _make_material(Color(0.74, 0.52, 0.38))
     player.add_child(head)
+    var hair := MeshInstance3D.new()
+    var hair_mesh := SphereMesh.new()
+    hair_mesh.radius = 0.25
+    hair_mesh.height = 0.5
+    hair.mesh = hair_mesh
+    hair.position = Vector3(0, 1.54, -0.03)
+    hair.scale = Vector3(1.0, 0.62, 1.0)
+    hair.material_override = _make_material(Color(0.08, 0.06, 0.05))
+    player.add_child(hair)
     var camera_pivot := Node3D.new()
     camera_pivot.name = "CameraPivot"
     camera_pivot.position = Vector3(0, 1.35, 0)
